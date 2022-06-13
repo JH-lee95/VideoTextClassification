@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 
@@ -36,9 +37,9 @@ def load_models(text_model_path="monologg/kobigbird-bert-base",vit_model_path="g
 def load_dataset(tokenizer,feature_extractor,data_dir='/home/ubuntu/blim/mining/news_dataset/'):
 
     # df
-    train_df = pd.read_csv(f'{data_dir}trimmed_dataset/train.csv')
-    val_df = pd.read_csv(f'{data_dir}trimmed_dataset/val.csv')
-    test_df = pd.read_csv(f'{data_dir}trimmed_dataset/test.csv')
+    train_df = pd.read_csv(os.path.join(data_dir, 'train.csv'))
+    val_df = pd.read_csv(os.path.join(data_dir, 'val.csv'))
+    test_df = pd.read_csv(os.path.join(data_dir, 'test.csv'))
 
     # load dataset
     train_dataset = VidTextDataset(train_df['video_dir'], 
@@ -70,7 +71,7 @@ def load_dataset(tokenizer,feature_extractor,data_dir='/home/ubuntu/blim/mining/
 
 def load_dataloader(tokenizer,feature_extractor,train_batch_size=1,val_batch_size=1,data_dir='/home/ubuntu/blim/mining/news_dataset/'):
     
-    train_dataset,val_dataset,test_dataset=load_dataset(tokenizer,feature_extractor,data_dir)
+    train_dataset,val_dataset,test_dataset=load_dataset(tokenizer,feature_extractor, data_dir)
     
 
     
@@ -84,7 +85,8 @@ def load_dataloader(tokenizer,feature_extractor,train_batch_size=1,val_batch_siz
 def train(args):
     
     text_embedder,tokenizer,vit,feature_extractor=load_models()
-    train_dataloader,val_dataloader,_=load_dataloader(tokenizer,feature_extractor)
+    train_dataloader,val_dataloader,_=load_dataloader(tokenizer,feature_extractor,
+                                                      data_dir = os.path.join('/home/ubuntu/blim/mining/news_dataset/', args.data))
     
     # train_dataset,val_dataset,_=load_dataset(tokenizer,feature_extractor)
         
@@ -130,9 +132,7 @@ def train(args):
             # text_ipt=text_ipt.to(args.device)
             labels=labels.squeeze(dim = 0).to(args.device)
             
-            
 
-            
             if args.model_type=="videotext":
                 loss,logits,features=model(text_ipt_dict,image_ipt,labels)
                 
@@ -149,15 +149,22 @@ def train(args):
             
             total_steps+=1
             
-            
-            if total_steps==args.eval_step:
+            if total_steps%args.eval_step==0:
                 val_loss,predictions,_=evaluate(model,val_dataloader,args)
                 if val_loss<best_loss:
                     best_loss=val_loss
                     torch.save({"model_state_dict":model.state_dict(),
                                 "optimizer_state_dict":optimizer.state_dict(),
                                "scheduler_state_dict":scheduler.state_dict()},
-                               f"{args.model_dir}/{args.model_type}_best_model.pth")
+                               f"{args.model_dir}/{args.model_type}_{args.data}_best_model.pth")
+                    
+    val_loss,predictions,_=evaluate(model,val_dataloader,args)
+    if val_loss<best_loss:
+        best_loss=val_loss
+        torch.save({"model_state_dict":model.state_dict(),
+                    "optimizer_state_dict":optimizer.state_dict(),
+                    "scheduler_state_dict":scheduler.state_dict()},
+                    f"{args.model_dir}/{args.model_type}_{args.data}_best_model.pth")
 
                 
             
@@ -277,13 +284,14 @@ if __name__=="__main__":
     parser.add_argument('--model_type',type=str, default="videotext")
     parser.add_argument("--epoch_size",type=int,default=10)
     parser.add_argument("--lr",type=float,default=1e-5)
-    parser.add_argument("--eval_step",type=int,default=50)
+    parser.add_argument("--eval_step",type=int,default=100)
     parser.add_argument("--device",type=str,default="cuda")
     parser.add_argument("--model_dir",type=str,default="./model")
     # parser.add_argument("--data_dir",type=str,default="./data")
     # parser.add_argument("--batch_size",type=int,default=1)
     parser.add_argument("--train",action="store_true")
     parser.add_argument("--test",action = "store_true")
+    parser.add_argument('--data', type = str, default = 'original')
     
     args=parser.parse_args()
     

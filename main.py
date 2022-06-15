@@ -165,6 +165,8 @@ def train(args):
                                "scheduler_state_dict":scheduler.state_dict()},
                                f"{args.model_dir}/{args.model_type}/{args.model_type}_{args.data}_best_model.pth")
                     
+        print(f"Epoch {epoch+1}/{epochs} Loss: {loss_total/total_steps}")
+                    
     val_loss,predictions,_=evaluate(model,val_dataloader,args)
     if val_loss<best_loss:
         best_loss=val_loss
@@ -175,7 +177,6 @@ def train(args):
 
                 
             
-        print(f"Epoch {epoch+1}/{epochs} Loss: {loss_total/total_steps}")
         
         
 def evaluate(model,val_dataloader,args):

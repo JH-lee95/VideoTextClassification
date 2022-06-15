@@ -34,44 +34,47 @@ def load_models(text_model_path="monologg/kobigbird-bert-base",vit_model_path="g
     
     return text_embedder,tokenizer,vit,feature_extractor
 
-def load_dataset(tokenizer,feature_extractor,data_dir='/home/ubuntu/blim/mining/news_dataset/'):
+def load_dataset(tokenizer,feature_extractor,max_frame_len,data_dir='/home/ubuntu/blim/mining/news_dataset/'):
 
     # df
     train_df = pd.read_csv(os.path.join(data_dir, 'train.csv'))
     val_df = pd.read_csv(os.path.join(data_dir, 'val.csv'))
     test_df = pd.read_csv(os.path.join(data_dir, 'test.csv'))
+    
+    
+    num_topic_labels=len(train_df["topic_label"].unique())
 
     # load dataset
     train_dataset = VidTextDataset(train_df['video_dir'], 
                                 train_df['text'], 
                                 train_df['topic_label'], 
-                                max_frame_len = 50, 
+                                max_frame_len = max_frame_len, 
                                 feature_extractor = feature_extractor,
-                                token_max_len = 2048,
+                                token_max_len = 1024,
                                 tokenizer = tokenizer)
 
     val_dataset = VidTextDataset(val_df['video_dir'], 
                                 val_df['text'], 
                                 val_df['topic_label'], 
-                                max_frame_len = 50, 
+                                max_frame_len = max_frame_len, 
                                 feature_extractor = feature_extractor,
-                                token_max_len = 2048,
+                                token_max_len = 1024,
                                 tokenizer = tokenizer)
 
     test_dataset = VidTextDataset(test_df['video_dir'], 
                                 test_df['text'], 
                                 test_df['topic_label'], 
-                                max_frame_len = 50, 
+                                max_frame_len = max_frame_len, 
                                 feature_extractor = feature_extractor,
-                                token_max_len = 2048,
+                                token_max_len = 1024,
                                 tokenizer = tokenizer)
     
-    return train_dataset,val_dataset,test_dataset
+    return train_dataset,val_dataset,test_dataset,num_topic_labels
 
 
-def load_dataloader(tokenizer,feature_extractor,train_batch_size=1,val_batch_size=1,data_dir='/home/ubuntu/blim/mining/news_dataset/'):
+def load_dataloader(tokenizer,feature_extractor,max_frame_len,train_batch_size=1,val_batch_size=1,data_dir='/home/ubuntu/blim/mining/news_dataset/'):
     
-    train_dataset,val_dataset,test_dataset=load_dataset(tokenizer,feature_extractor, data_dir)
+    train_dataset,val_dataset,test_dataset,num_topic_labels=load_dataset(tokenizer,feature_extractor,max_frame_len=max_frame_len,data_dir=data_dir)
     
 
     
@@ -80,17 +83,18 @@ def load_dataloader(tokenizer,feature_extractor,train_batch_size=1,val_batch_siz
     test_dataloader=DataLoader(test_dataset,batch_size=val_batch_size)
     
     
-    return train_dataloader,val_dataloader,test_dataloader
+    return train_dataloader,val_dataloader,test_dataloader,num_topic_labels
     
 def train(args):
     
     text_embedder,tokenizer,vit,feature_extractor=load_models()
-    train_dataloader,val_dataloader,_=load_dataloader(tokenizer,feature_extractor,
+    train_dataloader,val_dataloader,_,num_topic_labels=load_dataloader(tokenizer=tokenizer,feature_extractor=feature_extractor,
+                                                      max_frame_len=args.max_frame_len,
                                                       data_dir = os.path.join('/home/ubuntu/blim/mining/news_dataset/', args.data))
     
     # train_dataset,val_dataset,_=load_dataset(tokenizer,feature_extractor)
         
-    num_topic_labels=7  
+    num_topic_labels=num_topic_labels
     epochs=args.epoch_size
     lr=args.lr
     total_steps=0
@@ -149,6 +153,9 @@ def train(args):
             
             total_steps+=1
             
+            
+    
+            
             if total_steps%args.eval_step==0:
                 val_loss,predictions,_=evaluate(model,val_dataloader,args)
                 if val_loss<best_loss:
@@ -156,7 +163,7 @@ def train(args):
                     torch.save({"model_state_dict":model.state_dict(),
                                 "optimizer_state_dict":optimizer.state_dict(),
                                "scheduler_state_dict":scheduler.state_dict()},
-                               f"{args.model_dir}/{args.model_type}_{args.data}_best_model.pth")
+                               f"{args.model_dir}/{args.model_type}/{args.model_type}_{args.data}_best_model.pth")
                     
     val_loss,predictions,_=evaluate(model,val_dataloader,args)
     if val_loss<best_loss:
@@ -164,7 +171,7 @@ def train(args):
         torch.save({"model_state_dict":model.state_dict(),
                     "optimizer_state_dict":optimizer.state_dict(),
                     "scheduler_state_dict":scheduler.state_dict()},
-                    f"{args.model_dir}/{args.model_type}_{args.data}_best_model.pth")
+                    f"{args.model_dir}/{args.model_type}/{args.model_type}_{args.data}_best_model.pth")
 
                 
             
@@ -266,13 +273,13 @@ def test(args):
         vidt=VideoTransformer(vit)
         model=VidTextClassificationModel(text_embedder,vidt,num_topic_labels=num_topic_labels)
 
-    ckpt=torch.load(f"{args.model_dir}/{args.model_type}_best_model.pth")
+    ckpt=torch.load(f"{args.model_dir}/{args.model_type}/{args.model_type}_best_model.pth")
     model.load_state_dict(ckpt["model_state_dict"])
     model=model.to(args.device)
     
     _,_,result_dict=evaluate(model,test_dataloader,args)
     
-    with open(f"{args.model_dir}/{args.model_type}_classification_result.json","w") as f:
+    with open(f"{args.model_dir}/{args.model_type}/{args.model_type}_classification_result.json","w") as f:
         json.dump(result_dict,f)
     
     
@@ -292,14 +299,16 @@ if __name__=="__main__":
     parser.add_argument("--train",action="store_true")
     parser.add_argument("--test",action = "store_true")
     parser.add_argument('--data', type = str, default = 'original')
+    parser.add_argument("--max_frame_len",type=int,default=30)
+    parser.add_argument("--max_token_len",type=int,default=256)
     
     args=parser.parse_args()
     
+    
+    if not os.path.exists(f"{args.model_dir}/{args.model_type}/"):
+        os.mkdir(f"{args.model_dir}/{args.model_type}/")
+        
     if args.train:
         train(args)
     if args.test:
         test(args)
-
-        
-        
-    

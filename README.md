@@ -16,5 +16,5 @@
 
 
 # ToDo
-  - Experiment diverse pooling methods for extracting image sequence embeddings (max, cls, etc.)(the current method is avg pooling) 
+  - Experiment diverse pooling methods for extracting image sequence embeddings (max, cls, etc.)(the current applied method is avg pooling) 
   - Batch processing of videos

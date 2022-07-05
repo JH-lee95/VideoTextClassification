@@ -9,6 +9,12 @@
 
 본 연구는 나아가 Same Topic Prediction의 관점에서 Temporal Video Segmentation Task에도 적용될 수 있다.
 
+
+# ToDo
+  - Experiment of diverse pooling methods for extracting image sequence embeddings (max, cls, avg, etc.)
+  - Batch processing of videos
+
+
 ![image](https://user-images.githubusercontent.com/61833149/173534098-7a419d72-5758-4d27-be62-b56d30548a58.png)
 
 ![image](https://user-images.githubusercontent.com/61833149/173534459-09868e3b-2a97-4122-a26b-6525e9451d65.png)
